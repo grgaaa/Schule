@@ -1,12 +1,13 @@
 package com.gman.schuleui;
 
 import com.gman.schule.common.SchuleConfig;
+import com.gman.schule.common.Utils;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.time.DayOfWeek;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class ConfigForm extends JFrame {
 
@@ -21,37 +22,30 @@ public class ConfigForm extends JFrame {
     private JButton addRedirectButton;
     private JButton saveAllAndExitButton;
     private JCheckBox enableConfigCheckbox;
+    private JPanel confirmPanel;
+    private JPanel usersPanel;
+    private JComboBox usersComboBox;
+    private JLabel pauseLabel;
+    private JTextField pauseValue;
 
     public ConfigForm(String title) throws HeadlessException {
         super(title);
 
-        this.setSize(800,600);
+        this.setSize(800,800);
         this.setDefaultCloseOperation(EXIT_ON_CLOSE);
         this.setContentPane(mainPanel);
         this.setLocationRelativeTo(null);
         this.setVisible(true);
 
-        addScheduleButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                addConfigScheduleItem(null);
-            }
-        });
-        addRedirectButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                addConfigRedirectItem(null);
-            }
-        });
+        addScheduleButton.addActionListener(e -> addConfigScheduleItem(null));
+        addRedirectButton.addActionListener(e -> addConfigRedirectItem(null));
 
-        saveAllAndExitButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                saveAllAndExit();
-            }
-        });
+        saveAllAndExitButton.addActionListener(e -> saveAllAndExit());
 
-        loadExistingConfiguration();
+        usersComboBox.addItemListener(e -> loadExistingConfiguration((String) e.getItem()));
+
+        loadUsers();
+        loadExistingConfiguration(getSelectedUser());
     }
 
     private void createUIComponents() {
@@ -76,8 +70,17 @@ public class ConfigForm extends JFrame {
         scheduleScroll.repaint();
     }
 
-    private void loadExistingConfiguration() {
-        SchuleConfig schuleConfig = SchuleConfig.loadFromConfigFile();
+
+    private void loadExistingConfiguration(String user) {
+        scheduleScrollPanel.removeAll();
+        scheduleScrollPanel.validate();
+        scheduleScrollPanel.repaint();
+
+        redirectScrollPanel.removeAll();
+        redirectScrollPanel.validate();
+        redirectScrollPanel.repaint();
+
+        SchuleConfig schuleConfig = SchuleConfig.loadFromConfigFile(user);
         if (schuleConfig == null) { return; }
 
         for (SchuleConfig.ScheduleItem scheduleItem : schuleConfig.getScheduleItems()) {
@@ -87,12 +90,39 @@ public class ConfigForm extends JFrame {
         for (SchuleConfig.RedirectItem redirectItem : schuleConfig.getRedirectItems()) {
             addConfigRedirectItem(redirectItem);
         }
-
     }
+
+    private void loadUsers() {
+        String currentUser = Utils.getCurrentSystemUser();
+
+        List<String> systemUsers = Utils.getSystemUsers();
+        systemUsers.sort((user1, user2) -> {
+            if (currentUser.equals(user1)) {
+                return -1;
+            } else {
+                return user1.compareTo(user2);
+            }
+        });
+        for (String systemUser : systemUsers) {
+            usersComboBox.addItem(systemUser);
+        }
+    }
+
+    private String getSelectedUser() {
+        return (String) usersComboBox.getSelectedItem();
+    }
+
 
     private void saveAllAndExit() {
         SchuleConfig schuleConfig = new SchuleConfig();
         schuleConfig.setEnabled(enableConfigCheckbox.isSelected());
+
+        String pauseVal = pauseValue.getText();
+        if (pauseVal != null && pauseVal.matches("^[0-9]{1,3}$")) {
+            int durationMinutes = Integer.parseInt(pauseVal);
+            SchuleConfig.Pause pause = new SchuleConfig.Pause(System.currentTimeMillis(), TimeUnit.MINUTES.toMillis(durationMinutes));
+            schuleConfig.setPause(pause);
+        }
 
         Component[] scheduleItems = scheduleScrollPanel.getComponents();
         if (scheduleItems != null && scheduleItems.length > 0) {
@@ -146,8 +176,11 @@ public class ConfigForm extends JFrame {
                 schuleConfig.addRedirectItem(item);
             }
         }
-        schuleConfig.writeToConfigFile();
-        System.exit(0);
+
+        boolean result = schuleConfig.writeToConfigFile(getSelectedUser());
+        if (result) {
+            System.exit(0);
+        }
     }
 
 }

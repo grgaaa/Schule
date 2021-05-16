@@ -26,6 +26,8 @@ public class ConfigRedirectItem extends JPanel {
         urlFrom.setColumns(10);
         ipTo.setColumns(10);
 
+        ipTo.setText("127.0.0.1");
+
         deleteRedirectItemBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {

@@ -14,13 +14,13 @@
         </constraints>
         <properties/>
       </component>
-      <component id="c64d9" class="javax.swing.JTextField" binding="timeFrom">
+      <component id="c9a22" class="javax.swing.JFormattedTextField" binding="timeFrom">
         <constraints>
           <grid row="0" column="3" row-span="1" col-span="1" vsize-policy="1" hsize-policy="6" anchor="0" fill="0" indent="0" use-parent-layout="false"/>
         </constraints>
         <properties/>
       </component>
-      <component id="cf9d3" class="javax.swing.JTextField" binding="timeTo">
+      <component id="a351a" class="javax.swing.JFormattedTextField" binding="timeTo">
         <constraints>
           <grid row="0" column="5" row-span="1" col-span="1" vsize-policy="3" hsize-policy="6" anchor="0" fill="0" indent="0" use-parent-layout="false"/>
         </constraints>

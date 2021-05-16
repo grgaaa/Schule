@@ -2,6 +2,7 @@ package com.gman.schulesvc;
 
 import com.gman.schule.common.Log;
 import com.gman.schule.common.SchuleConfig;
+import com.gman.schule.common.Utils;
 
 import java.awt.*;
 import java.nio.charset.StandardCharsets;
@@ -12,10 +13,8 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjuster;
 import java.time.temporal.TemporalAdjusters;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.*;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -36,6 +35,8 @@ public class SchuleService {
     private final List<ScheduledFuture> scheduledTasks = new ArrayList<>();
     private SchuleConfig schuleConfig;
 
+    private volatile boolean isActive = false;
+
     private static final SchuleService instance = new SchuleService();
 
     public static void main(String[] args) {
@@ -54,7 +55,7 @@ public class SchuleService {
                 @Override
                 public void run() {
                     try {
-                        instance.loadConfiguration();
+                        instance.loadConfiguration(Utils.getCurrentSystemUser());
                     } catch (Exception e) {
                         e.printStackTrace();
                         LOG.error(e);
@@ -68,8 +69,8 @@ public class SchuleService {
     }
 
 
-    private void loadConfiguration() {
-        SchuleConfig newSchuleConfig = SchuleConfig.loadFromConfigFile();
+    private void loadConfiguration(String user) {
+        SchuleConfig newSchuleConfig = SchuleConfig.loadFromConfigFile(user);
 
         if (schuleConfig != null && newSchuleConfig != null
                 && Objects.equals(schuleConfig.getId(), newSchuleConfig.getId())) {
@@ -82,6 +83,7 @@ public class SchuleService {
         } else {
             if (newSchuleConfig.isEnabled()) {
                 cancelSchule();
+                if (isActive) { restoreHost(); }
                 applySchuleConfig(newSchuleConfig);
             } else {
                 if (!scheduledTasks.isEmpty()) {
@@ -102,6 +104,22 @@ public class SchuleService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+
+        SchuleConfig.Pause pause = schuleConfig.getPause();
+        if (pause != null) {
+            Date pauseFrom = new Date(pause.getFrom());
+            Date pauseTo = new Date(pause.getFrom() + pause.getDuration());
+
+            Date now1 = new Date();
+            if (now1.after(pauseFrom) && now1.before(pauseTo) && isActive) {
+                LOG.info(String.format("pausing for %s minutes", TimeUnit.MILLISECONDS.toMinutes(pause.getDuration())));
+
+                restoreHost();
+                ScheduledFuture<?> applyConfigFuture = executorService.schedule(() -> applySchuleConfig(schuleConfig), 1000 + now1.toInstant().until(pauseTo.toInstant(), ChronoUnit.MILLIS), TimeUnit.MILLISECONDS);
+                addScheduledTask(applyConfigFuture);
+                return;
+            }
+        }
 
         for (SchuleConfig.ScheduleItem scheduleItem : scheduleItems) {
             if (!scheduleItem.isEnabled()) {
@@ -127,7 +145,8 @@ public class SchuleService {
                     // apply host rules
                     executorService.execute(new HijackHostFile(schuleConfig));
                     // schedule host restore
-                    executorService.schedule(new RestoreHostFile(), now.toLocalTime().until(timeTo, ChronoUnit.MILLIS), TimeUnit.MILLISECONDS);
+                    ScheduledFuture<?> hostRestoreFuture = executorService.schedule(new RestoreHostFile(), now.toLocalTime().until(timeTo, ChronoUnit.MILLIS), TimeUnit.MILLISECONDS);
+                    addScheduledTask(hostRestoreFuture);
 
                     TemporalAdjuster nextWeek = TemporalAdjusters.next(DayOfWeek.of(activeDay));
                     scheduledDateTime = scheduledDateTime.with(nextWeek);
@@ -142,9 +161,7 @@ public class SchuleService {
             LOG.info("hijack time: "+scheduledDateTime);
             // schedule host hijack
             ScheduledFuture<?> hijackFuture = executorService.scheduleAtFixedRate(new HijackHostFile(schuleConfig), now.until(scheduledDateTime, ChronoUnit.MILLIS), TimeUnit.DAYS.toMillis(7), TimeUnit.MILLISECONDS);
-            synchronized (LOCK) {
-                scheduledTasks.add(hijackFuture);
-            }
+            addScheduledTask(hijackFuture);
 
             // schedule host restore
             LocalDateTime scheduledRestoreTime = scheduledDateTime
@@ -155,9 +172,13 @@ public class SchuleService {
             LOG.info("restore time: "+scheduledRestoreTime);
 
             ScheduledFuture<?> restoreFuture = executorService.scheduleAtFixedRate(new RestoreHostFile(), now.until(scheduledRestoreTime, ChronoUnit.MILLIS), TimeUnit.DAYS.toMillis(7), TimeUnit.MILLISECONDS);
-            synchronized (LOCK) {
-                scheduledTasks.add(restoreFuture);
-            }
+            addScheduledTask(restoreFuture);
+        }
+    }
+
+    private void addScheduledTask(ScheduledFuture<?> future) {
+        synchronized (LOCK) {
+            scheduledTasks.add(future);
         }
     }
 
@@ -205,7 +226,7 @@ public class SchuleService {
             e.printStackTrace();
         }
 
-        trayIcon.displayMessage("Kk je pa 'dej? :)", String.format("Shule is %s.", (activated ? "ACTIVATED" : "OFF")), TrayIcon.MessageType.INFO);
+        trayIcon.displayMessage("Ja kk je pa de? :)", String.format("Shule is %s.", (activated ? "ACTIVE" : "OFF")), TrayIcon.MessageType.INFO);
     }
 
     private static class HijackHostFile implements Runnable {
@@ -232,6 +253,7 @@ public class SchuleService {
                 Files.write(hostFile, collect, StandardCharsets.US_ASCII);
 
                 instance.showTrayNotification(true);
+                instance.isActive = true;
 
             } catch (Exception e) {
                 LOG.error(e);
@@ -250,6 +272,8 @@ public class SchuleService {
                     Files.copy(hostBak, hostFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
                 }
                 instance.showTrayNotification(false);
+                instance.isActive = false;
+
             } catch (Exception e) {
                 LOG.error(e);
                 e.printStackTrace();

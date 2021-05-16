@@ -17,12 +17,13 @@ import java.util.stream.Stream;
 
 public class SchuleConfig {
 
-    public static final Path configPath = Paths.get(System.getenv("APPDATA")+"\\Schule\\schule.json");
+//    public static final Path configPath = Paths.get(System.getenv("APPDATA")+"\\Schule\\schule.json");
 //    public static final Path configPath = Paths.get(System.getProperty("user.home")+"\\IdeaProjects\\Schule\\schule.json");
     private static final Gson gson = new GsonBuilder().create();
 
     private long id = System.currentTimeMillis();
     private boolean isEnabled = true;
+    private Pause pause;
 
     private final List<ScheduleItem> scheduleItems = new ArrayList<>();
     private final List<RedirectItem> redirectItems = new ArrayList<>();
@@ -33,6 +34,14 @@ public class SchuleConfig {
 
     public void removeRedirectItem(RedirectItem item) {
         redirectItems.remove(item);
+    }
+
+    public Pause getPause() {
+        return pause;
+    }
+
+    public void setPause(Pause pause) {
+        this.pause = pause;
     }
 
     public void addScheduleItem(ScheduleItem item) {
@@ -67,9 +76,23 @@ public class SchuleConfig {
         return redirectItems;
     }
 
-    public boolean writeToConfigFile() {
+
+    public static Path getConfigPath(String user) {
+        Path currentUserHome = Paths.get(System.getProperty("user.home"));
+        Path appdata = Paths.get(System.getenv("APPDATA"));
+
+        String specifiedUserHome = currentUserHome.getParent().toString() + System.getProperty("file.separator") + user;
+        Path appDataSubpath = appdata.subpath(currentUserHome.getNameCount(), appdata.getNameCount());
+
+        return Paths.get(specifiedUserHome, appDataSubpath.toString(), "Schule", "schule.json");
+    }
+
+
+    public boolean writeToConfigFile(String user) {
+        Path configPath = getConfigPath(user);
+
         if (Files.exists(configPath)) {
-            boolean configFileLock = getConfigFileLock();
+            boolean configFileLock = getConfigFileLock(user);
             if (!configFileLock) {
                 return false;
             }
@@ -87,11 +110,12 @@ public class SchuleConfig {
         return false;
     }
 
-    public static SchuleConfig loadFromConfigFile() {
+    public static SchuleConfig loadFromConfigFile(String user) {
+        Path configPath = getConfigPath(user);
         if (!Files.exists(configPath)) {
             return null;
         }
-        boolean configFileLock = getConfigFileLock();
+        boolean configFileLock = getConfigFileLock(user);
         if (!configFileLock) {
             return null;
         }
@@ -108,12 +132,13 @@ public class SchuleConfig {
         return null;
     }
 
-    private static boolean getConfigFileLock() {
+    private static boolean getConfigFileLock(String user) {
+        Path configPath = getConfigPath(user);
         if (!Files.exists(configPath)) {
             return true;
         }
         FileLock fileLock;
-        try (RandomAccessFile raf = new RandomAccessFile(SchuleConfig.configPath.toFile(), "rw")) {
+        try (RandomAccessFile raf = new RandomAccessFile(configPath.toFile(), "rw")) {
             while ((fileLock = raf.getChannel().tryLock()) == null) {
                 Thread.sleep(250);
             }
@@ -218,6 +243,49 @@ public class SchuleConfig {
 
         public void setEnabled(boolean enabled) {
             isEnabled = enabled;
+        }
+    }
+
+    public static class UserItem {
+        private String user;
+        private boolean isEnabled;
+
+        public UserItem(String user) {
+            this.user = user;
+        }
+
+        public String getUser() {
+            return user;
+        }
+
+        public void setUser(String user) {
+            this.user = user;
+        }
+    }
+
+    public static class Pause {
+        private long from;
+        private long duration;
+
+        public Pause(long from, long duration) {
+            this.from = from;
+            this.duration = duration;
+        }
+
+        public long getFrom() {
+            return from;
+        }
+
+        public void setFrom(long from) {
+            this.from = from;
+        }
+
+        public long getDuration() {
+            return duration;
+        }
+
+        public void setDuration(long duration) {
+            this.duration = duration;
         }
     }
 }

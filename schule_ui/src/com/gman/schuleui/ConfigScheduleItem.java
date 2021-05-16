@@ -3,15 +3,20 @@ package com.gman.schuleui;
 import com.gman.schule.common.SchuleConfig;
 
 import javax.swing.*;
+import javax.swing.text.DateFormatter;
+import javax.swing.text.DefaultFormatterFactory;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.text.DateFormat;
 import java.time.DayOfWeek;
 
 public class ConfigScheduleItem extends JPanel {
     private JComboBox daysOfWeek;
-    private JTextField timeFrom;
-    private JTextField timeTo;
+    private JFormattedTextField timeFrom;
+    private JFormattedTextField timeTo;
     private JButton deleteButton;
     private JLabel txtFrom;
     private JLabel txtTo;
@@ -28,6 +33,9 @@ public class ConfigScheduleItem extends JPanel {
 
         timeFrom.setColumns(5);
         timeTo.setColumns(5);
+
+        timeFrom.setText("00:00");
+        timeTo.setText("23:59");
 
         fillDaysOfWeek();
 
