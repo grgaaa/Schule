@@ -90,6 +90,15 @@ public class ConfigForm extends JFrame {
         for (SchuleConfig.RedirectItem redirectItem : schuleConfig.getRedirectItems()) {
             addConfigRedirectItem(redirectItem);
         }
+
+        enableConfigCheckbox.setSelected(schuleConfig.isEnabled());
+        SchuleConfig.Pause pause = schuleConfig.getPause();
+        if (pause != null) {
+            long remaining = (pause.getFrom() + pause.getDuration()) - System.currentTimeMillis();
+            if (remaining > 0) {
+                pauseValue.setText(""+TimeUnit.MILLISECONDS.toMinutes(remaining));
+            }
+        }
     }
 
     private void loadUsers() {
